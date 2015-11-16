@@ -115,6 +115,9 @@ growproc(int n)
   uint sz;
   initlock(&addr_space.lock, "addr_space");
   
+  // Try to grow memory, if succeed, update
+  // other threads' and processes' sz (that are
+  // sharing the same address space 
   acquire(&addr_space.lock);
   sz = proc->sz;
   if(n > 0){
@@ -136,8 +139,8 @@ growproc(int n)
         p->sz = sz;
 	  }
   }
-    
   release(&addr_space.lock);
+  
   switchuvm(proc);
   return 0;
 }
@@ -199,17 +202,19 @@ exit(void)
   if(proc == initproc)
     panic("init exiting");
 
-	if (proc->thread == 0) {
-		for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-		  if(p->parent == proc){
-			p->killed = 1;
-			// Wake process from sleep if necessary.
-			if(p->state == SLEEPING)
-			  p->state = RUNNABLE;
-			join(p->pid);
-		  }
-      }
+  // If exiting a process, then kill all threads and children first
+  if (proc->thread == 0) {
+	for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	  if (p->parent == proc) {
+	    p->killed = 1;
+		// Wake process from sleep if necessary.
+		if(p->state == SLEEPING) {
+		  p->state = RUNNABLE;
+	    }
+  		join(p->pid);
+	  }
 	}
+  }
 
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
@@ -461,21 +466,23 @@ kill(int pid)
   return -1;
 }
 
-// Create a new process copying p as the parent.
-// Sets up stack to return as if from system call.
-// Caller must set state of returned proc to RUNNABLE.
+// Create a new thread sharing the same pgdir with parent
+// but using a separate stack
 int clone(void(*fcn)(void*), void *arg, void *stack) {
   int i, pid;
   struct proc *newtask;
   
-  if((uint)stack <= 0 || (uint)stack % PGSIZE != 0) {
+  // Check for valid stack and fcn address
+  if((uint)stack <= 0 || (uint)stack % PGSIZE != 0
+		|| (uint)fcn <= 0) {
 	return -1;
   }
   
-  // Allocate process.
+  // Allocate new proc for thread
   if((newtask = allocproc()) == 0)
     return -1;
   
+  // Set properties for thread
   newtask->sz = proc->sz;
   newtask->thread = 1;
   
@@ -486,10 +493,8 @@ int clone(void(*fcn)(void*), void *arg, void *stack) {
     newtask->parent = proc->parent;
   }
   
-  newtask->pgdir = proc->pgdir;
+  newtask->pgdir = proc->pgdir; // share the same pgdir with proc
   *newtask->tf = *proc->tf;
-  
-  // Clear %eax so that fork returns 0 in the child.
   newtask->tf->eax = 0;
 
   // temporary array to copy into the bottom of new stack 
@@ -515,7 +520,7 @@ int clone(void(*fcn)(void*), void *arg, void *stack) {
  
   pid = newtask->pid;
 
-  newtask->tf->eip = (uint)fcn;
+  newtask->tf->eip = (uint)fcn; // instruction pointer at fcn
   newtask->tf->esp = sp;
   switchuvm(newtask);
   newtask->state = RUNNABLE;
@@ -523,6 +528,7 @@ int clone(void(*fcn)(void*), void *arg, void *stack) {
   return pid;
 }
 
+// Wait for a particular thread or any thread to finish
 int join(int pid) {
   struct proc *p;
   int have_threads, child_pid, valid;
@@ -558,7 +564,6 @@ int join(int pid) {
         child_pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-        //freevm(p->pgdir);
         p->state = UNUSED;
         p->pid = 0;
         p->parent = 0;

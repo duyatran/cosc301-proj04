@@ -9,7 +9,7 @@
  * This is where you'll need to implement the user-level functions
  */
 
-void *start[NPROC];
+void *start[NPROC]; // array used to keep references to all stacks
 
 void lock_init(lock_t *lock) {
 	lock->flag = 0;
@@ -25,8 +25,9 @@ void lock_release(lock_t *lock) {
 
 int thread_join(int pid) {
 	int t_id = join(pid);
-	if (t_id != -1)
+	if (t_id != -1) {
 		free(start[t_id]);
+	}
 	return t_id;
 }
 
@@ -37,7 +38,7 @@ int thread_create(void (*start_routine)(void *), void *arg) {
 		stack = stack + (PGSIZE - (uint)stack % PGSIZE);
 	}
 	int pid = clone(start_routine, arg, stack);
-	start[pid] = stack;
+	start[pid] = stack; // use pid as an index into the start array
 	
 	printf(1, "stack is %d and start is %d\n", stack, start[pid]);
 	return pid;

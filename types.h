@@ -7,3 +7,8 @@ typedef uint pde_t;
 typedef struct __lock_t {
   uint flag;       
 } lock_t;
+
+// Semaphore
+typedef struct __semaphore_t {
+  uint flag;  
+} semaphore_t;
