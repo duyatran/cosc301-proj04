@@ -203,6 +203,7 @@ exit(void)
     panic("init exiting");
 
   // If exiting a process, then kill all threads and children first
+  acquire(&ptable.lock);
   if (proc->thread == 0) {
 	for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 	  if (p->parent == proc) {
@@ -211,11 +212,16 @@ exit(void)
 		if(p->state == SLEEPING) {
 		  p->state = RUNNABLE;
 	    }
-  		join(p->pid);
 	  }
 	}
   }
-
+  release(&ptable.lock);
+  for (;;) {
+	if (join(-1) == -1) {
+	  break;
+	}
+  }
+  
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
     if(proc->ofile[fd]){
