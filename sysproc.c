@@ -89,3 +89,20 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int sys_clone(void) {
+	int fcn, arg, stack;
+	if(argint(0, &fcn) < 0 || argint(1, &arg) < 0 
+		|| argint(2, &stack) < 0) {
+		return -1;
+	}
+	return clone((void *)fcn, (void *)arg, (void *)stack);
+}
+
+int sys_join(void) {
+	int pid;
+	if(argint(0, &pid) < 0) {
+		return -1;
+	}
+	return join(pid);
+}
