@@ -134,11 +134,13 @@ growproc(int n)
   if (proc->thread == 1) {
 	  parent = proc->parent;
   }
+  acquire(&ptable.lock);
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
 	  if(p->parent == parent) {
         p->sz = sz;
 	  }
   }
+  release(&ptable.lock);
   release(&addr_space.lock);
   
   switchuvm(proc);
