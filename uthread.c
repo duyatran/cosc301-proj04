@@ -5,11 +5,13 @@
 #include "x86.h"
 #define PGSIZE (4096)
 #define NPROC (64)
+#undef NULL
+#define NULL ((void*)0)
 /*
  * This is where you'll need to implement the user-level functions
  */
 
-void *start[NPROC]; // array used to keep references to all stacks
+sp *start[NPROC]; // array used to keep references to all stacks
 
 void lock_init(lock_t *lock) {
 	lock->flag = 0;
@@ -24,31 +26,41 @@ void lock_release(lock_t *lock) {
 }
 
 int thread_join(int pid) {
-	lock_t mutex;
-	lock_init(&mutex);
-	
-	lock_acquire(&mutex);
 	int t_id = join(pid);
 	if (t_id != -1) {
-		free(start[t_id]);
+		int i;
+		for (i = 0; i < NPROC; i++) {
+			if (start[i]->pid == t_id) {
+				free(start[i]->stack);
+				start[i]->stack = 0;
+				break;
+			}
+		}
 	}
-	lock_release(&mutex);
 	return t_id;
 }
 
 int thread_create(void (*start_routine)(void *), void *arg) {
-	lock_t mutex;
-	lock_init(&mutex);
-	
-	lock_acquire(&mutex);
 	void *stack = malloc(PGSIZE*2);
 
 	if((uint)stack % PGSIZE) {
 		stack = stack + (PGSIZE - (uint)stack % PGSIZE);
 	}
 	int pid = clone(start_routine, arg, stack);
-	start[pid%NPROC] = stack; // use pid as an index into the start array
-	lock_release(&mutex);
-
+	int i;
+	for (i = 0; i < NPROC; i++) {
+		if (start[i] == NULL) {
+			sp *stackptr = malloc(sizeof(sp));
+			stackptr->pid = pid;
+			stackptr->stack = stack;
+			start[i] = stackptr;
+			break;
+		}
+		else if (start[i]->stack == 0) {
+			start[i]->pid = pid;
+			start[i]->stack = stack;
+			break;
+		}
+	}
 	return pid;
 }

@@ -9,12 +9,9 @@
 
 struct {
   struct spinlock lock;
+  struct spinlock addr_space;
   struct proc proc[NPROC];
 } ptable;
-
-struct {
-  struct spinlock lock;
-} addr_space;
 
 static struct proc *initproc;
 
@@ -113,12 +110,11 @@ int
 growproc(int n)
 {
   uint sz;
-  initlock(&addr_space.lock, "addr_space");
   
   // Try to grow memory, if succeed, update
   // other threads' and processes' sz (that are
   // sharing the same address space 
-  acquire(&addr_space.lock);
+  acquire(&ptable.addr_space);
   sz = proc->sz;
   if(n > 0){
     if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
@@ -141,7 +137,7 @@ growproc(int n)
 	  }
   }
   release(&ptable.lock);
-  release(&addr_space.lock);
+  release(&ptable.addr_space);
   
   switchuvm(proc);
   return 0;

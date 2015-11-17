@@ -7,3 +7,8 @@ typedef uint pde_t;
 typedef struct __lock_t {
   uint flag;       
 } lock_t;
+
+typedef struct __stack_pointer {
+	int pid;
+	void *stack;
+} sp;
