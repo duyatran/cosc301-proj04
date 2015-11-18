@@ -32,7 +32,7 @@ int thread_join(int pid) {
 		for (i = 0; i < NPROC; i++) {
 			if (start[i]->pid == t_id) {
 				free(start[i]->stack);
-				start[i]->stack = 0;
+				free(start[i]);
 				break;
 			}
 		}
@@ -47,19 +47,20 @@ int thread_create(void (*start_routine)(void *), void *arg) {
 		stack = stack + (PGSIZE - (uint)stack % PGSIZE);
 	}
 	int pid = clone(start_routine, arg, stack);
+	if (pid == -1) {
+		free(stack);
+	}
+	else {
 	int i;
-	for (i = 0; i < NPROC; i++) {
-		if (start[i] == NULL) {
-			sp *stackptr = malloc(sizeof(sp));
-			stackptr->pid = pid;
-			stackptr->stack = stack;
-			start[i] = stackptr;
-			break;
-		}
-		else if (start[i]->stack == 0) {
-			start[i]->pid = pid;
-			start[i]->stack = stack;
-			break;
+		for (i = 0; i < NPROC; i++) {
+			if (start[i] == NULL) {
+				sp *stackptr = malloc(sizeof(sp));
+				stackptr->pid = pid;
+				stackptr->stack = stack;
+				start[i] = stackptr;
+				printf(1, "create: pid is %d & stack is %d\n",start[i]->pid,start[i]->stack);
+				break;
+			}
 		}
 	}
 	return pid;

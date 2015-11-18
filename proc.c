@@ -9,10 +9,10 @@
 
 struct {
   struct spinlock lock;
-  struct spinlock addr_space;
   struct proc proc[NPROC];
 } ptable;
 
+struct spinlock addr_space;
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -25,6 +25,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  initlock(&addr_space, "addr_space");
 }
 
 //PAGEBREAK: 32
@@ -109,19 +110,23 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint sz;
-  
+
   // Try to grow memory, if succeed, update
   // other threads' and processes' sz (that are
   // sharing the same address space 
-  acquire(&ptable.addr_space);
+  acquire(&addr_space);
+  uint sz;
   sz = proc->sz;
   if(n > 0){
-    if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
+    if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0) {
+      release(&addr_space);
       return -1;
+	}
   } else if(n < 0){
-    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0)
+    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0) {
+      release(&addr_space);
       return -1;
+	}
   }
   proc->sz = sz;
   
@@ -130,16 +135,17 @@ growproc(int n)
   if (proc->thread == 1) {
 	  parent = proc->parent;
   }
+  release(&addr_space);
+  
   acquire(&ptable.lock);
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
 	  if(p->parent == parent) {
         p->sz = sz;
 	  }
   }
-  release(&ptable.lock);
-  release(&ptable.addr_space);
-  
   switchuvm(proc);
+  release(&ptable.lock);
+
   return 0;
 }
 
@@ -200,11 +206,11 @@ exit(void)
   if(proc == initproc)
     panic("init exiting");
 
-  // If exiting a process, then kill all threads and children first
+  // If exiting a process, then kill all threads first
   acquire(&ptable.lock);
   if (proc->thread == 0) {
 	for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-	  if (p->parent == proc) {
+	  if (p->parent == proc && p->thread == 1) {
 	    p->killed = 1;
 		// Wake process from sleep if necessary.
 		if(p->state == SLEEPING) {

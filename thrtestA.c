@@ -78,6 +78,7 @@ void worker(void *arg_ptr) {
   int tmp = 0;
 
   for(i = 0; i < 10000; i++) { tmp++; }
+
   sleep(10);
   lock_acquire(&xlock);
   global += 1;
